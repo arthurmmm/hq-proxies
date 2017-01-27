@@ -5,4 +5,4 @@ export WORKON_HOME=$HOME/.virtualenvs
 source /usr/local/bin/virtualenvwrapper.sh
 workon amwatcher-spider
 cd $path
-nohup ./start.py >/dev/null 2>&1 &
+nohup $path/start.py >/dev/null 2>&1 &
