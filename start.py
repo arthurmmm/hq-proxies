@@ -30,6 +30,9 @@ redis_db = Redis(
     db=dbsetting.REDIS_DB
 )
 
+PROXY_LOW = 5
+PROXY_EXHAUST = 2
+
 CHECK_INTERVAL = 5
 LOOP_DELAY = 20
 PROCTECT_SEC = 600
@@ -38,12 +41,12 @@ def proxyFetch(test=False):
     while True:
         pcount = int(redis_db['proxy_count'])
         logger.info('代理数量：%s' % pcount)
-        if pcount < 5 and not redis_db.exists(dbsetting.PROXY_PROTECT):
+        if pcount < PROXY_LOW and not redis_db.exists(dbsetting.PROXY_PROTECT):
             logger.info('代理数量过低，补充代理中...')
             redis_db[dbsetting.PROXY_PROTECT] = True
             redis_db.expire(dbsetting.PROXY_PROTECT, PROCTECT_SEC)
             os.system('scrapy crawl proxy_fetch > /dev/null 2>&1')
-        elif pcount < 2:
+        elif pcount < PROXY_EXHAUST:
             logger.info('代理池即将耗尽，强制补充...')
             redis_db[dbsetting.PROXY_PROTECT] = True
             redis_db.expire(dbsetting.PROXY_PROTECT, PROCTECT_SEC)
