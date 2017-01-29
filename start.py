@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 import time
 import random
+import unittest
 from redis import Redis
-from proxy_spider import dbsetting_test as dbsetting
+from proxy_spider import dbsetting
 from threading import Thread
 from datetime import datetime
 
@@ -83,10 +85,14 @@ def proxyCheck(test=False):
     while True:
         logger.info('检查库存代理质量... =￣ω￣=')
         os.system('scrapy crawl proxy_check  > /dev/null 2>&1')
+        pcount = redis_db[dbsetting.PROXY_COUNT]
+        if pcount:
+            pcount = int(pcount)
+        else:
+            pcount = 0
+        logger.info('检查完成，存活代理数%s..' % pcount)
         if test:
             break
-        pcount = int(redis_db['proxy_count'])
-        logger.info('检查完成，存活代理数%s..' % pcount)
         time.sleep(CHECK_INTERVAL)
 
 def main():
@@ -111,12 +117,13 @@ def main():
             logger.error('抓取线程已挂..重启中..')
             fetch_thd.start()
         time.sleep(60)
-    
-def test():
-    proxyCheck(test=True)
-    proxyFetch(test=True)
+
+class TestCases(unittest.TestCase):
+    def proxyCheck(self):
+        proxyCheck(test=True)
+    def proxyFetch(self):
+        proxyCheck() 
     
 if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] == 'test':
-        test()
+    pass
     # main()

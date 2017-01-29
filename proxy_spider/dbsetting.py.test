@@ -1,0 +1,14 @@
+MONGO_URI = 'mongodb://proxy:passw0rd@10.66.200.252:27017/admin'
+MONGO_DATABASE = 'proxypool'
+
+VENDOR_COLLECTION = 'vendors'
+VALIDATOR_COLLECTION = 'validator'
+
+REDIS_HOST = '10.66.114.52'
+REDIS_PORT = 6379
+REDIS_PASSWORD = 'crs-khq47qpg:passw0rd'
+REDIS_DB = 0
+PROXY_SET = 'proxy_pool'
+PROXY_PROTECT = 'proxy_protect'
+PROXY_COUNT = 'proxy_count'
+PROXY_REFRESH = 'proxy_refresh'

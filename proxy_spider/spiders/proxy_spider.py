@@ -62,7 +62,7 @@ class ProxyCheckSpider(Spider):
     def closed(self, reason):
         proxy_count = self.redis_db.scard(dbsetting.PROXY_SET)
         logger.info('代理池验证完成，有效代理: %s' % proxy_count)
-        self.redis_db[dbsetting.proxy_count] = proxy_count
+        self.redis_db[dbsetting.PROXY_COUNT] = proxy_count
 
 class ProxyFetchSpider(Spider):
     name = 'proxy_fetch'
