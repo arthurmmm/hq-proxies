@@ -117,4 +117,6 @@ def test():
     proxyFetch(test=True)
     
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == 'test':
+        test()
+    # main()
