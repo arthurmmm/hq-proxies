@@ -5,7 +5,7 @@ import os
 import time
 import random
 from redis import Redis
-from proxy_spider import dbsetting
+from proxy_spider import dbsetting_test as dbsetting
 from threading import Thread
 from datetime import datetime
 

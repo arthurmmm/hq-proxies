@@ -1,6 +1,8 @@
 # Privacy
 dbsetting.py
 dbsetting_test.py
+start.sh
+stop.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
