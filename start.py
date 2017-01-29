@@ -7,34 +7,32 @@ import time
 import random
 import unittest
 from redis import Redis
-# from proxy_spider import dbsetting
 from threading import Thread
 from datetime import datetime
-
 import logging
 from logging.handlers import RotatingFileHandler
-
-FORMAT = '%(asctime)s %(levelno)s/%(lineno)d: %(message)s'
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter(fmt=FORMAT)
-rfh = RotatingFileHandler('/var/tmp/proxy_pool_commander.log', maxBytes=5*1024*1024, backupCount=10)
-rfh.setFormatter(formatter)
-rfh.setLevel(logging.DEBUG)
-logger.addHandler(rfh)
-
-logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 if __name__ == '__main__':
     from proxy_spider import dbsetting
     fetchcmd = 'scrapy crawl proxy_fetch > /dev/null 2>&1'
     checkcmd = 'scrapy crawl proxy_check > /dev/null 2>&1'
+    log_path = '/var/tmp/proxy_pool_commander.log'
 else:
     print('测试模式！')
     from proxy_spider import dbsetting_test as dbsetting
     fetchcmd = 'scrapy crawl proxy_fetch mode=test > /dev/null 2>&1'
     checkcmd = 'scrapy crawl proxy_check mode=test > /dev/null 2>&1'
-    # is_test = True
+    log_path = '/var/tmp/proxy_pool_commander.test.log'
+
+FORMAT = '%(asctime)s %(levelno)s/%(lineno)d: %(message)s'
+logging.basicConfig(level=logging.DEBUG, format=FORMAT)    
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter(fmt=FORMAT)
+rfh = RotatingFileHandler(log_path, maxBytes=1*1024*1024, backupCount=10)
+rfh.setFormatter(formatter)
+rfh.setLevel(logging.DEBUG)
+logger.addHandler(rfh)
     
 redis_db = dbsetting.redis_db
 
