@@ -7,6 +7,7 @@ import random
 from redis import Redis
 from proxy_spider import dbsetting
 from threading import Thread
+from datetime import datetime
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -33,52 +34,66 @@ redis_db = Redis(
 PROXY_LOW = 5
 PROXY_EXHAUST = 2
 
-CHECK_INTERVAL = 5
+CHECK_INTERVAL = 5 
 LOOP_DELAY = 20
 PROCTECT_SEC = 600
+REFRESH_SEC = 3600 * 24
+
+def startCrawl(reason=None):
+    logger.info(reason)
+    redis_db[dbsetting.PROXY_PROTECT] = True
+    redis_db[dbsetting.REFRESH_SEC] = True
+    redis_db.expire(dbsetting.PROXY_PROTECT, PROCTECT_SEC)
+    redis_db.expire(dbsetting.PROXY_REFRESH, REFRESH_SEC)
+    os.system('scrapy crawl proxy_fetch > /dev/null 2>&1')
 
 def proxyFetch(test=False):
     while True:
+        protect_ttl = redis_db.ttl(dbsetting.PROXY_PROTECT)
+        refresh_ttl = redis_db.ttl(dbsetting.PROXY_REFRESH)
+        
         pcount = int(redis_db['proxy_count'])
         logger.info('代理数量：%s' % pcount)
-        if pcount < PROXY_LOW and not redis_db.exists(dbsetting.PROXY_PROTECT):
-            logger.info('代理数量过低，补充代理中...')
-            redis_db[dbsetting.PROXY_PROTECT] = True
-            redis_db.expire(dbsetting.PROXY_PROTECT, PROCTECT_SEC)
-            os.system('scrapy crawl proxy_fetch > /dev/null 2>&1')
+        if pcount < PROXY_LOW and not protect_ttl:
+            startCrawl('代理池存量太低啦，需要补充些代理... (*゜ー゜*)')
         elif pcount < PROXY_EXHAUST:
-            logger.info('代理池即将耗尽，强制补充...')
-            redis_db[dbsetting.PROXY_PROTECT] = True
-            redis_db.expire(dbsetting.PROXY_PROTECT, PROCTECT_SEC)
-            os.system('scrapy crawl proxy_fetch')
-        elif redis_db.exists(dbsetting.PROXY_PROTECT):
-            logger.info('未达到代理更新最小间隔...')
+            startCrawl('代理池即将耗尽啦，需要立即补充些代理... Σ( ° △ °|||)︴')
+        elif pcount < PROXY_LOW and protect_ttl:
+            logger.info('代理池存量有点低，但尚在保护期，让我们继续观察一会... (◑▽◐)')
+        elif not refresh_ttl:
+            startCrawl('代理池太久没更新啦，补充些新鲜代理... (～o￣3￣)～')
         else:
-            logger.info('当前可用代理数：%s 库存情况良好\(^o^)/' % pcount)
+            logger.info('当前可用代理数：%s 库存情况良好... (๑•̀ㅂ•́)و✧' % pcount)
         if test:
             break
-        loop_delay = LOOP_DELAY+random.random()*2
-        try:
-            ttl = int(redis_db.ttl(dbsetting.PROXY_PROTECT))
-        except TypeError:
-            ttl = 0
-        logger.info('%s秒后开始下次检测，剩余保护时间：%s' % (loop_delay, ttl))
-        time.sleep(loop_delay)
+        
+        protect_ttl = redis_db.ttl(dbsetting.PROXY_PROTECT)
+        refresh_ttl = redis_db.ttl(dbsetting.PROXY_REFRESH)
+        
+        if protect_ttl:
+            protect_ttl = int(protect_ttl)
+            logger.info('代理池尚在保护期, 剩余保护时间：%s' % protect_ttl)
+        if refresh_ttl:
+            refresh_ttl = int(refresh_ttl)
+            logger.info('距离下次常规更新还剩%s秒' % refresh_ttl)
+        logger.info('%s秒后开始下次检测...' % LOOP_DELAY)
+        time.sleep(LOOP_DELAY)
 
 def proxyCheck(test=False):
     while True:
-        logger.info('开始自检..')
+        logger.info('检查库存代理质量... =￣ω￣=')
         os.system('scrapy crawl proxy_check  > /dev/null 2>&1')
         if test:
             break
         pcount = int(redis_db['proxy_count'])
-        logger.info('自检完成，存活代理数%s..' % pcount)
+        logger.info('检查完成，存活代理数%s..' % pcount)
         time.sleep(CHECK_INTERVAL)
 
 def main():
-    logger.info('启动进程..')
-    # 重置protect
+    logger.info('启动进程中...')
+    # 重置protect和refresh标记
     redis_db.delete(dbsetting.PROXY_PROTECT)
+    redis_db.delete(dbsetting.PROXY_REFRESH)
     # 启动自检进程
     check_thd = Thread(target=proxyCheck)
     check_thd.daemon = True
@@ -88,8 +103,6 @@ def main():
     fetch_thd.daemon = True
     fetch_thd.start()
     
-    # fetch_thd.join()
-    # check_thd.join()
     while True:
         if not check_thd.is_alive():
             logger.error('自检线程已挂..重启中..')
@@ -101,7 +114,6 @@ def main():
     
 def test():
     proxyCheck(test=True)
-    # print('start fetch')
     proxyFetch(test=True)
     
 if __name__ == '__main__':

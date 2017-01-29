@@ -90,10 +90,6 @@ class ProxyFetchSpider(Spider):
         for vendor in self.mongo_vendors.find({'status': 'active'}):
             logger.debug(vendor)
             callback = getattr(self, vendor['parser'])
-            proxy = self.redis_db.srandmember(dbsetting.PROXY_SET)
-            if proxy:
-                proxy = proxy.decode('utf-8')
-            logger.info('获得代理：'+proxy)
             yield Request(url=vendor['url'], callback=callback)
     
     
@@ -109,9 +105,9 @@ class ProxyFetchSpider(Spider):
     
     
     def parse_xici(self, response):
-        # ''' 
-        # @url http://www.xicidaili.com/nn/
-        # '''
+        ''' 
+        @url http://www.xicidaili.com/nn/
+        '''
         logger.info('解析http://www.xicidaili.com/nn/')
         succ = 0
         fail = 0
