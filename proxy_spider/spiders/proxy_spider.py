@@ -33,7 +33,7 @@ class ProxyCheckSpider(Spider):
         self.redis_db = dbsetting.redis_db
         self.validator_pool = set([])
         
-        for k, v in dbsetting.__dict__:
+        for k, v in dbsetting.__dict__.items():
             if re.match('^[A-Z_]+$', k):
                 setattr(self, k, v)
     
