@@ -70,7 +70,7 @@ class ProxyFetchSpider(Spider):
     loop_delay = 10
     protect_sec = 180
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, mode='prod', *args, **kwargs):
         if mode == 'prod':
             from proxy_spider import dbsetting
         elif mode == 'test':
