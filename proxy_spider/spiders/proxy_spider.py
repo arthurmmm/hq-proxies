@@ -30,7 +30,7 @@ class ProxyCheckSpider(Spider):
         
         self.mongo_vendors = dbsetting.mongo_vendors
         self.mongo_validator = dbsetting.mongo_validator
-        self.redis_db = dbsetting.redis
+        self.redis_db = dbsetting.redis_db
         self.validator_pool = set([])
         
         for k, v in dbsetting.__dict__:
