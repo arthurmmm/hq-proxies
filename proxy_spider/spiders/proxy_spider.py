@@ -16,7 +16,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger(__name__)
-rfh = RotatingFileHandler('/var/tmp/proxy_pool_spider.log', maxBytes=5*1024*1024, backupCount=10)
+rfh = RotatingFileHandler('/var/tmp/proxy_pool_spider.log', maxBytes=1*1024*1024, backupCount=10)
 logger.addHandler(rfh)
 
 class ProxyCheckSpider(Spider):
@@ -43,7 +43,7 @@ class ProxyCheckSpider(Spider):
             self.validator_pool.add((validator['url'], validator['startstring']))
         # 开始自检
         logger.info('开始自检...')
-        self.redis_db[self.proxy_count] = self.redis_db.scard(self.PROXY_SET)
+        self.redis_db[self.PROXY_COUNT] = self.redis_db.scard(self.PROXY_SET)
         for proxy in self.redis_db.smembers(self.PROXY_SET):
             proxy = proxy.decode('utf-8')
             vaurl, vastart = random.choice(list(self.validator_pool))
@@ -78,10 +78,10 @@ class ProxyFetchSpider(Spider):
         
         self.mongo_vendors = dbsetting.mongo_vendors
         self.mongo_validator = dbsetting.mongo_validator
-        self.redis_db = dbsetting.redis
+        self.redis_db = dbsetting.redis_db
         self.validator_pool = set([])
         
-        for k, v in dbsetting.__dict__:
+        for k, v in dbsetting.__dict__.items():
             if re.match('^[A-Z_]+$', k):
                 setattr(self, k, v)
         
