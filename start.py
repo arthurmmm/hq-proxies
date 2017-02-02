@@ -1,28 +1,32 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import os
 import sys
 import time
 import random
 import unittest
-from redis import Redis
+import yaml
+from redis import StrictRedis
 from threading import Thread
 from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 
 if __name__ == '__main__':
-    from proxy_spider import dbsetting
+    LOCAL_CONFIG_YAML = '/etc/hq-proxies.yml'
+    with open(LOCAL_CONFIG_YAML, 'r') as f:
+        LOCAL_CONFIG = yaml.load(f)
     fetchcmd = 'scrapy crawl proxy_fetch > /dev/null 2>&1'
     checkcmd = 'scrapy crawl proxy_check > /dev/null 2>&1'
-    log_path = '/var/tmp/proxy_pool_commander.log'
+    log_path = '/data/logs/hq-proxies.log'
 else:
     print('测试模式！')
-    from proxy_spider import dbsetting_test as dbsetting
+    LOCAL_CONFIG_YAML = '/etc/hq-proxies.test.yml'
+    with open(LOCAL_CONFIG_YAML, 'r') as f:
+        LOCAL_CONFIG = yaml.load(f)
     fetchcmd = 'scrapy crawl proxy_fetch -a mode=test'
     checkcmd = 'scrapy crawl proxy_check -a mode=test'
-    log_path = '/var/tmp/proxy_pool_commander.test.log'
+    log_path = '/data/logs/hq-proxies.test.log'
 
 FORMAT = '%(asctime)s %(levelno)s/%(lineno)d: %(message)s'
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)    
@@ -33,8 +37,23 @@ rfh = RotatingFileHandler(log_path, maxBytes=1*1024*1024, backupCount=10)
 rfh.setFormatter(formatter)
 rfh.setLevel(logging.DEBUG)
 logger.addHandler(rfh)
+
+# redis keys
+PROXY_COUNT = 'hq-proxies:proxy_count'
+PROXY_SET = 'hq-proxies:proxy_pool'
+PROXY_PROTECT = 'hq-proxies:proxy_protect'
+PROXY_REFRESH = 'hq-proxies:proxy_refresh'
+
+# mongo collections
+VENDORS = 'vendors'
+VALIDATORS = 'validators'
     
-redis_db = dbsetting.redis_db
+redis_db = StrictRedis(
+    host=LOCAL_CONFIG['REDIS_HOST'], 
+    port=LOCAL_CONFIG['REDIS_PORT'], 
+    password=LOCAL_CONFIG['REDIS_PASSWORD'],
+    db=LOCAL_CONFIG['REDIS_DB']
+)
 
 PROXY_LOW = 5
 PROXY_EXHAUST = 2
@@ -46,21 +65,23 @@ REFRESH_SEC = 3600 * 24
 
 def startFetch(reason=None, fetchcmd='scrapy crawl proxy_fetch > /dev/null 2>&1'):
     logger.info(reason)
-    redis_db[dbsetting.PROXY_PROTECT] = True
-    redis_db[dbsetting.PROXY_REFRESH] = True
-    redis_db.expire(dbsetting.PROXY_PROTECT, PROTECT_SEC)
-    redis_db.expire(dbsetting.PROXY_REFRESH, REFRESH_SEC)
+    redis_db.setex(PROXY_PROTECT, PROTECT_SEC, True)
+    redis_db.setex(PROXY_REFRESH, REFRESH_SEC, True)
     os.system(fetchcmd)
 
 def proxyFetch(single_run=False):
     while True:
-        protect_ttl = redis_db.ttl(dbsetting.PROXY_PROTECT)
-        refresh_ttl = redis_db.ttl(dbsetting.PROXY_REFRESH)
+        protect_ttl = redis_db.ttl(PROXY_PROTECT)
+        refresh_ttl = redis_db.ttl(PROXY_REFRESH)
         
-        pcount = int(redis_db[dbsetting.PROXY_COUNT])
+        pcount = redis_db.get(PROXY_COUNT)
+        if not pcount:
+            pcount = 0
+        else:
+            pcount = int(pcount)
         logger.info('代理数量：%s' % pcount)
         if pcount < PROXY_LOW and not protect_ttl:
-            startFetch('代理池存量低了，我们需要补充些代理... (*゜ー゜*)', fetchcmd)
+            startFetch('代理池存量低了，需要补充些代理... (*゜ー゜*)', fetchcmd)
         elif pcount < PROXY_EXHAUST:
             startFetch('代理池即将耗尽啦，需要立即补充些代理... Σ( ° △ °|||)', fetchcmd)
         elif pcount < PROXY_LOW and protect_ttl:
@@ -70,13 +91,13 @@ def proxyFetch(single_run=False):
         else:
             logger.info('当前可用代理数：%s 库存情况良好... (๑•̀ㅂ•́)و✧' % pcount)
         
-        protect_ttl = redis_db.ttl(dbsetting.PROXY_PROTECT)
-        refresh_ttl = redis_db.ttl(dbsetting.PROXY_REFRESH)
+        protect_ttl = redis_db.ttl(PROXY_PROTECT)
+        refresh_ttl = redis_db.ttl(PROXY_REFRESH)
         
-        if protect_ttl:
+        if protect_ttl > 0:
             protect_ttl = int(protect_ttl)
             logger.info('代理池尚在保护期, 剩余保护时间：%s' % protect_ttl)
-        if refresh_ttl:
+        if refresh_ttl > 0:
             refresh_ttl = int(refresh_ttl)
             logger.info('距离下次常规更新还剩%s秒' % refresh_ttl)
         logger.info('%s秒后开始下次检测...' % LOOP_DELAY)
@@ -88,8 +109,8 @@ def proxyFetch(single_run=False):
 def proxyCheck(single_run=False):
     while True:
         logger.info('检查库存代理质量...')
-        os.system('scrapy crawl proxy_check  > /dev/null 2>&1')
-        pcount = redis_db[dbsetting.PROXY_COUNT]
+        os.system(checkcmd)
+        pcount = redis_db.get(PROXY_COUNT)
         if pcount:
             pcount = int(pcount)
         else:
@@ -101,15 +122,14 @@ def proxyCheck(single_run=False):
 
 def main():
     logger.info('启动进程中...')
-    # 重置protect和refresh标记
-    redis_db.delete(dbsetting.PROXY_PROTECT)
-    redis_db[dbsetting.PROXY_REFRESH] = True
-    redis_db.expire(dbsetting.PROXY_REFRESH, REFRESH_SEC)
-    # 启动自检进程
+    # reset 'protect' and 'refresh' tag
+    redis_db.delete(PROXY_PROTECT)
+    redis_db.setex(PROXY_REFRESH, REFRESH_SEC, True)
+    # start proxy-check thread
     check_thd = Thread(target=proxyCheck)
     check_thd.daemon = True
     check_thd.start()
-    # 启动代理池补充进程
+    # start proxy-fetch thread
     fetch_thd = Thread(target=proxyFetch)
     fetch_thd.daemon = True
     fetch_thd.start()
@@ -131,25 +151,23 @@ class TestCases(unittest.TestCase):
         proxyFetch(True) 
         
     def proxyExhaust(self):
-        redis_db[dbsetting.PROXY_PROTECT] = True
-        redis_db.expire(dbsetting.PROXY_PROTECT, PROTECT_SEC)
-        redis_db[dbsetting.PROXY_COUNT] = 0
+        redis_db.setex(PROXY_PROTECT, PROTECT_SEC, True)
+        redis_db.set(PROXY_COUNT, 0)
         proxyFetch(True)
         
     def proxyLow(self):
-        redis_db.delete(dbsetting.PROXY_PROTECT)
-        redis_db[dbsetting.PROXY_COUNT] = 3
+        redis_db.delete(PROXY_PROTECT)
+        redis_db.set(PROXY_COUNT, 3)
         proxyFetch(True)
         
     def proxyLowProtect(self):
-        redis_db[dbsetting.PROXY_PROTECT] = True
-        redis_db.expire(dbsetting.PROXY_PROTECT, PROTECT_SEC)
-        redis_db[dbsetting.PROXY_COUNT] = 3
+        redis_db.setex(PROXY_PROTECT, PROTECT_SEC, True)
+        redis_db.set(PROXY_COUNT, 3)
         proxyFetch(True)    
     
     def proxyRefresh(self):
-        redis_db.delete(dbsetting.PROXY_REFRESH)
-        redis_db[dbsetting.PROXY_COUNT] = 10
+        redis_db.delete(PROXY_REFRESH)
+        redis_db.set(PROXY_COUNT, 10)
         proxyFetch(True)  
     
     def loop(self):

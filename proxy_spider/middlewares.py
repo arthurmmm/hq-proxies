@@ -7,8 +7,6 @@ from scrapy.downloadermiddlewares.useragent import UserAgentMiddleware
 from scrapy.downloadermiddlewares.downloadtimeout import DownloadTimeoutMiddleware
 from scrapy.http import TextResponse
 import logging
-from redis import Redis
-from . import dbsetting
 from twisted.web._newclient import ResponseNeverReceived
 from twisted.internet.error import TimeoutError, ConnectionRefusedError, ConnectError
 
