@@ -80,11 +80,11 @@ def proxyFetch(single_run=False):
         else:
             pcount = int(pcount)
         logger.info('代理数量：%s' % pcount)
-        if pcount < PROXY_LOW and protect_ttl < 0:
+        if pcount < PROXY_LOW and protect_ttl <= 0:
             startFetch('代理池存量低了，需要补充些代理... (*゜ー゜*)', fetchcmd)
         elif pcount < PROXY_EXHAUST:
             startFetch('代理池即将耗尽啦，需要立即补充些代理... Σ( ° △ °|||)', fetchcmd)
-        elif pcount < PROXY_LOW and protect_ttl >= 0:
+        elif pcount < PROXY_LOW and protect_ttl > 0:
             logger.info('代理池存量有点低，但尚在保护期，让我们继续观察一会... O__O')
         elif not refresh_ttl:
             startFetch('代理池太久没更新啦，补充些新鲜代理... ლ(╹◡╹ლ)', fetchcmd)
@@ -93,12 +93,9 @@ def proxyFetch(single_run=False):
         
         protect_ttl = redis_db.ttl(PROXY_PROTECT)
         refresh_ttl = redis_db.ttl(PROXY_REFRESH)
-        
         if protect_ttl > 0:
-            protect_ttl = int(protect_ttl)
             logger.info('代理池尚在保护期, 剩余保护时间：%s' % protect_ttl)
         if refresh_ttl > 0:
-            refresh_ttl = int(refresh_ttl)
             logger.info('距离下次常规更新还剩%s秒' % refresh_ttl)
         logger.info('%s秒后开始下次检测...' % LOOP_DELAY)
         
