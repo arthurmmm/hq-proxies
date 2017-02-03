@@ -22,7 +22,7 @@ log_path = '/data/logs/hq-proxies.spider.log'
 FORMAT = '%(asctime)s %(levelno)s/%(lineno)d: %(message)s'
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)    
 formatter = logging.Formatter(fmt=FORMAT)
-rfh = RotatingFileHandler(log_path, maxBytes=1*1024*1024, backupCount=10)
+rfh = RotatingFileHandler(log_path, maxBytes=1*1024*1024, backupCount=5)
 rfh.setFormatter(formatter)
 rfh.setLevel(logging.DEBUG)
 logger.addHandler(rfh)

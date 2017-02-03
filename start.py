@@ -16,7 +16,7 @@ if __name__ == '__main__':
     LOCAL_CONFIG_YAML = '/etc/hq-proxies.yml'
     with open(LOCAL_CONFIG_YAML, 'r') as f:
         LOCAL_CONFIG = yaml.load(f)
-    fetchcmd = 'scrapy crawl proxy_fetch > /dev/null 2>&1'
+    fetchcmd = 'scrapy crawl proxy_fetch'
     checkcmd = 'scrapy crawl proxy_check > /dev/null 2>&1'
     log_path = '/data/logs/hq-proxies.log'
 else:
