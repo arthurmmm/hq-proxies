@@ -1,4 +1,4 @@
-FROM daocloud.io/python:3-onbuild
+FROM daocloud.io/python:3.4-onbuild
 
 # Setting timezone
 RUN rm -f /etc/localtime
