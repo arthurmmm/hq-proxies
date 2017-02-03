@@ -2,5 +2,5 @@ pymongo==3.4.0
 redis==2.10.5
 requests==2.13.0
 Scrapy==1.3.0
-Twisted==17.1.0rc1
+Twisted==16.6.0
 PyYAML==3.12
