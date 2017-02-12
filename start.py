@@ -18,7 +18,6 @@ if __name__ == '__main__':
         LOCAL_CONFIG = yaml.load(f)
     fetchcmd = 'scrapy crawl proxy_fetch'
     checkcmd = 'scrapy crawl proxy_check > /dev/null 2>&1'
-    log_path = '/data/logs/hq-proxies.log'
 else:
     print('测试模式！')
     LOCAL_CONFIG_YAML = '/etc/hq-proxies.test.yml'
@@ -26,7 +25,6 @@ else:
         LOCAL_CONFIG = yaml.load(f)
     fetchcmd = 'scrapy crawl proxy_fetch -a mode=test'
     checkcmd = 'scrapy crawl proxy_check -a mode=test'
-    log_path = '/data/logs/hq-proxies.test.log'
 
 FORMAT = '%(asctime)s %(levelno)s/%(lineno)d: %(message)s'
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)    
