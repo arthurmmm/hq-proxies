@@ -31,12 +31,22 @@ else:
 FORMAT = '%(asctime)s %(levelno)s/%(lineno)d: %(message)s'
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)    
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter(fmt=FORMAT)
+rfh = RotatingFileHandler(log_path, maxBytes=1*1024*1024, backupCount=10)
+rfh.setFormatter(formatter)
+rfh.setLevel(logging.DEBUG)
+logger.addHandler(rfh)
 
 # redis keys
-PROXY_COUNT = LOCAL_CONFIG['PROXY_COUNT']
-PROXY_SET = LOCAL_CONFIG['PROXY_SET']
-PROXY_PROTECT = LOCAL_CONFIG['PROXY_PROTECT']
-PROXY_REFRESH = LOCAL_CONFIG['PROXY_REFRESH']
+PROXY_COUNT = 'hq-proxies:proxy_count'
+PROXY_SET = 'hq-proxies:proxy_pool'
+PROXY_PROTECT = 'hq-proxies:proxy_protect'
+PROXY_REFRESH = 'hq-proxies:proxy_refresh'
+
+# mongo collections
+VENDORS = 'vendors'
+VALIDATORS = 'validators'
     
 redis_db = StrictRedis(
     host=LOCAL_CONFIG['REDIS_HOST'], 
@@ -45,14 +55,13 @@ redis_db = StrictRedis(
     db=LOCAL_CONFIG['REDIS_DB']
 )
 
-# settings
-PROXY_LOW = LOCAL_CONFIG['PROXY_LOW']
-PROXY_EXHAUST = LOCAL_CONFIG['PROXY_EXHAUST']
+PROXY_LOW = 5
+PROXY_EXHAUST = 2
 
-CHECK_INTERVAL = LOCAL_CONFIG['CHECK_INTERVAL']
-LOOP_DELAY = LOCAL_CONFIG['LOOP_DELAY']
-PROTECT_SEC = LOCAL_CONFIG['PROTECT_SEC']
-REFRESH_SEC = LOCAL_CONFIG['REFRESH_SEC']
+CHECK_INTERVAL = 10
+LOOP_DELAY = 20
+PROTECT_SEC = 600
+REFRESH_SEC = 3600 * 24
 
 def startFetch(reason=None, fetchcmd='scrapy crawl proxy_fetch > /dev/null 2>&1'):
     logger.info(reason)

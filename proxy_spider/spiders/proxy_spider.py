@@ -3,7 +3,6 @@
 import json
 import time
 from datetime import datetime
-from pymongo import MongoClient
 from redis import StrictRedis
 import re
 import random
@@ -17,23 +16,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-log_path = '/data/logs/hq-proxies.spider.log'
-FORMAT = '%(asctime)s %(levelno)s/%(lineno)d: %(message)s'
-logging.basicConfig(level=logging.DEBUG, format=FORMAT)    
-formatter = logging.Formatter(fmt=FORMAT)
-rfh = RotatingFileHandler(log_path, maxBytes=1*1024*1024, backupCount=5)
-rfh.setFormatter(formatter)
-rfh.setLevel(logging.DEBUG)
-logger.addHandler(rfh)
-
-# redis keys
-PROXY_COUNT = 'hq-proxies:proxy_count'
-PROXY_SET = 'hq-proxies:proxy_pool'
-
-# mongo collections
-VENDORS = 'vendors'
-VALIDATORS = 'validators'
 
 class ProxyCheckSpider(Spider):
     ''' Spider to crawl free proxy servers for intern
@@ -47,10 +29,6 @@ class ProxyCheckSpider(Spider):
             LOCAL_CONFIG_YAML = '/etc/hq-proxies.test.yml'
         with open(LOCAL_CONFIG_YAML, 'r') as f:
             LOCAL_CONFIG = yaml.load(f)
-        self.mongo_client = MongoClient(LOCAL_CONFIG['MONGO_URI'])
-        self.mongo_db = self.mongo_client[LOCAL_CONFIG['MONGO_DATABASE']]
-        self.mongo_vendors = self.mongo_db[VENDORS]
-        self.mongo_validators = self.mongo_db[VALIDATORS]
         
         self.redis_db = StrictRedis(
             host=LOCAL_CONFIG['REDIS_HOST'], 
@@ -58,17 +36,18 @@ class ProxyCheckSpider(Spider):
             password=LOCAL_CONFIG['REDIS_PASSWORD'],
             db=LOCAL_CONFIG['REDIS_DB']
         )
-
+        
         self.validator_pool = set([])
-    
-    def start_requests(self):
-        # Loading validator pool
-        for validator in self.mongo_validators.find({}):
+        for validator in LOCAL_CONFIG['PROXY_VALIDATORS']:
             self.validator_pool.add((validator['url'], validator['startstring']))
-        # start self check thread
+        self.PROXY_COUNT = LOCAL_CONFIG['PROXY_COUNT']
+        self.PROXY_SET = LOCAL_CONFIG['PROXY_SET']
+        
+    def start_requests(self):
+
         logger.info('测试代理池内代理质量...')
-        self.redis_db.set(PROXY_COUNT, self.redis_db.scard(PROXY_SET))
-        for proxy in self.redis_db.smembers(PROXY_SET):
+        self.redis_db.set(self.PROXY_COUNT, self.redis_db.scard(self.PROXY_SET))
+        for proxy in self.redis_db.smembers(self.PROXY_SET):
             proxy = proxy.decode('utf-8')
             vaurl, vastart = random.choice(list(self.validator_pool))
             yield Request(url=vaurl, meta={'proxy': proxy, 'startstring': vastart}, callback=self.checkin, dont_filter=True)
@@ -77,19 +56,19 @@ class ProxyCheckSpider(Spider):
         res = response.body_as_unicode()
         if 'startstring' in response.meta and res.startswith(response.meta['startstring']):
             proxy = response.meta['proxy']
-            self.redis_db.sadd(PROXY_SET, proxy)
+            self.redis_db.sadd(self.PROXY_SET, proxy)
             logger.info('可用代理+1  %s' % proxy)
             yield None
         else:
             proxy = response.url if 'proxy' not in response.meta else response.meta['proxy']
-            self.redis_db.srem(PROXY_SET, proxy)
+            self.redis_db.srem(self.PROXY_SET, proxy)
             logger.info('无效代理  %s' % proxy)
             yield None
     
     def closed(self, reason):
-        pcount = self.redis_db.scard(PROXY_SET)
+        pcount = self.redis_db.scard(self.PROXY_SET)
         logger.info('代理池测试完成，有效代理数: %s' % pcount)
-        self.redis_db.set(PROXY_COUNT, pcount)
+        self.redis_db.set(self.PROXY_COUNT, pcount)
 
 class ProxyFetchSpider(Spider):
     name = 'proxy_fetch'
@@ -103,10 +82,6 @@ class ProxyFetchSpider(Spider):
             LOCAL_CONFIG_YAML = '/etc/hq-proxies.test.yml'
         with open(LOCAL_CONFIG_YAML, 'r') as f:
             LOCAL_CONFIG = yaml.load(f)
-        self.mongo_client = MongoClient(LOCAL_CONFIG['MONGO_URI'])
-        self.mongo_db = self.mongo_client[LOCAL_CONFIG['MONGO_DATABASE']]
-        self.mongo_vendors = self.mongo_db[VENDORS]
-        self.mongo_validators = self.mongo_db[VALIDATORS]
         
         self.redis_db = StrictRedis(
             host=LOCAL_CONFIG['REDIS_HOST'], 
@@ -114,16 +89,17 @@ class ProxyFetchSpider(Spider):
             password=LOCAL_CONFIG['REDIS_PASSWORD'],
             db=LOCAL_CONFIG['REDIS_DB']
         )
+        self.PROXY_COUNT = LOCAL_CONFIG['PROXY_COUNT']
+        self.PROXY_SET = LOCAL_CONFIG['PROXY_SET']
 
         self.validator_pool = set([])
+        for validator in LOCAL_CONFIG['PROXY_VALIDATORS']:
+            self.validator_pool.add((validator['url'], validator['startstring']))
+        
+        self.vendors = LOCAL_CONFIG['PROXY_VENDORS']
     
     def start_requests(self):
-        # loading validator pool from MongoDB
-        logger.debug([v for v in self.mongo_validators.find({})])
-        for validator in self.mongo_validators.find({}):
-            self.validator_pool.add((validator['url'], validator['startstring']))
-        # loading proxy vendors from MongoDB and start fetching
-        for vendor in self.mongo_vendors.find({'status': 'active'}):
+        for vendor in self.vendors:
             logger.debug(vendor)
             callback = getattr(self, vendor['parser'])
             yield Request(url=vendor['url'], callback=callback)
@@ -132,7 +108,7 @@ class ProxyFetchSpider(Spider):
         res = response.body_as_unicode()
         if 'startstring' in response.meta and res.startswith(response.meta['startstring']):
             proxy = response.meta['proxy']
-            self.redis_db.sadd(PROXY_SET, proxy)
+            self.redis_db.sadd(self.PROXY_SET, proxy)
             logger.info('可用代理+1  %s' % proxy)
             yield None
         else:
@@ -163,7 +139,7 @@ class ProxyFetchSpider(Spider):
                 logger.info('丢弃慢速代理: %s 延迟%s秒' % (proxy, latency))
                 continue
             logger.info('验证: %s' % proxy)
-            if not self.redis_db.sismember(PROXY_SET, proxy):
+            if not self.redis_db.sismember(self.PROXY_SET, proxy):
                 vaurl, vastart = random.choice(list(self.validator_pool))
                 yield Request(url=vaurl, meta={'proxy': proxy, 'startstring': vastart}, callback=self.checkin, dont_filter=True)
             else:
@@ -181,7 +157,7 @@ class ProxyFetchSpider(Spider):
             proxy = 'http://' + addr
             print(proxy)
             logger.info('验证: %s' % proxy)
-            if not self.redis_db.sismember(PROXY_SET, proxy):
+            if not self.redis_db.sismember(self.PROXY_SET, proxy):
                 vaurl, vastart = random.choice(list(self.validator_pool))
                 yield Request(url=vaurl, meta={'proxy': proxy, 'startstring': vastart}, callback=self.checkin, dont_filter=True)
             else:
@@ -203,7 +179,7 @@ class ProxyFetchSpider(Spider):
                 logger.info('丢弃非高匿代理：%s' % proxy)
                 continue
             logger.info('验证: %s' % proxy)
-            if not self.redis_db.sismember(PROXY_SET, proxy):
+            if not self.redis_db.sismember(self.PROXY_SET, proxy):
                 vaurl, vastart = random.choice(list(self.validator_pool))
                 yield Request(url=vaurl, meta={'proxy': proxy, 'startstring': vastart}, callback=self.checkin, dont_filter=True)
             else:
@@ -228,7 +204,7 @@ class ProxyFetchSpider(Spider):
             port = tr.css('td::text').extract()[1]
             proxy = 'http://%s:%s' % (ip, port)
             logger.info('验证: %s' % proxy)
-            if not self.redis_db.sismember(PROXY_SET, proxy):
+            if not self.redis_db.sismember(self.PROXY_SET, proxy):
                 vaurl, vastart = random.choice(list(self.validator_pool))
                 yield Request(url=vaurl, meta={'proxy': proxy, 'startstring': vastart}, callback=self.checkin, dont_filter=True)
             else:
@@ -241,5 +217,5 @@ class ProxyFetchSpider(Spider):
             yield Request(url=new_url, meta=new_meta, callback=self.parse_kxdaili)
     
     def closed(self, reason):
-        logger.info('代理池更新完成，有效代理数: %s' % self.redis_db.scard(PROXY_SET))
+        logger.info('代理池更新完成，有效代理数: %s' % self.redis_db.scard(self.PROXY_SET))
         

@@ -1,0 +1,43 @@
+---
+# 请填写redis配置
+# 请把这个配置文件放置到/etc/hq-proxies.yml
+REDIS_HOST: your_redis_host
+REDIS_PORT: 6379
+REDIS_PASSWORD: your_redis_password
+REDIS_DB: your_redis_db
+
+# Redis key 
+PROXY_COUNT: hq-proxies:proxy_count
+PROXY_SET: hq-proxies:proxy_pool
+PROXY_PROTECT: hq-proxies:proxy_protect
+PROXY_REFRESH: hq-proxies:proxy_refresh
+
+# 代理数量低于proxy_low时会刷新
+PROXY_LOW: 5 
+# 代理数量低于proxy_exhaust时会强制刷新
+PROXY_EXHAUST: 2
+
+# 多久检查一次代理质量
+CHECK_INTERVAL: 10
+# 多久检查一次代理数量
+LOOP_DELAY: 20
+# 每次获取代理后添加一个保护时间，避免频繁刷新
+PROTECT_SEC: 600
+# 强制刷新时间
+REFRESH_SEC: 86400
+
+# 配置代理源和验证页
+PROXY_VENDORS: 
+- parser: parse_xici
+  url: http://www.xicidaili.com/nn/
+- parser: parse_kxdaili
+  url: http://www.kxdaili.com/dailiip/1/1.html#ip
+- parser: parse_ip181
+  url: http://www.ip181.com/
+- parser: parse_66ip
+  url: http://www.66ip.cn/nmtq.php?getnum=100&isp=0&anonymoustype=3&start=&ports=&export=&ipaddress=&area=1&proxytype=0&api=66ip
+  
+# 可以配置多个验证页，会随机抽取一个用于验证
+PROXY_VALIDATORS:
+- url: http://119.29.246.101
+  startstring: hello world! :)
