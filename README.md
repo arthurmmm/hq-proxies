@@ -19,10 +19,25 @@
 手工部署的话跑`pip install -r requirements.txt`安装依赖包
 
 # 使用
-在爬虫中通过redis.srandmember从redis SET中随机拿一个代理用。redis SET和其他用到的key可以在hq-proxies.yml中配置。   
-如果代理超时就retry，代理池有自检retry时候再次拿到失效代理的概率很低，但如果代理被BAN的话还是得在redis里srem手工移除。
+在scrapy中使用代理池的只需要添加一个middleware，每次爬取时从redis SET里用srandmember随机获取一个代理使用，代理失效和一般的请求超时一样retry，代理池的自检特性保证了我们retry时候再次拿到失效代理的概率很低。middleware代码示例：   
 
-博客： http://blog.arthurmao.me/2017/02/python-redis-hq-proxies
+```python
+class DynamicProxyMiddleware(object):
+    def process_request(self, request, spider):
+        redis_db = StrictRedis(
+            host=LOCAL_CONFIG['REDIS_HOST'], 
+            port=LOCAL_CONFIG['REDIS_PORT'], 
+            password=LOCAL_CONFIG['REDIS_PASSWORD'],
+            db=LOCAL_CONFIG['REDIS_DB']
+        ) 
+        proxy = redis_db.sismember(PROXY_SET, proxy):
+        logger.debug('使用代理[%s]访问[%s]' % (proxy, request.url))
+        request.meta['proxy'] = proxy
+```
+
+
+博客： http://blog.arthurmao.me/2017/02/python-redis-hq-proxies   
+
 简书： http://www.jianshu.com/p/6cd4f1876b31   
 
 日志截图：
