@@ -22,7 +22,8 @@
 在爬虫中通过redis.srandmember从redis SET中随机拿一个代理用。redis SET和其他用到的key可以在hq-proxies.yml中配置。   
 如果代理超时就retry，代理池有自检retry时候再次拿到失效代理的概率很低，但如果代理被BAN的话还是得在redis里srem手工移除。
 
-相关博客：TODO
+博客： http://blog.arthurmao.me/2017/02/python-redis-hq-proxies
+简书： http://www.jianshu.com/p/6cd4f1876b31   
 
 日志截图：
 ![Paste_Image.png](http://upload-images.jianshu.io/upload_images/4610828-29e8d33a438a606f.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
