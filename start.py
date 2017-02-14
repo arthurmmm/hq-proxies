@@ -58,7 +58,7 @@ def startFetch(reason=None, fetchcmd='scrapy crawl proxy_fetch > /dev/null 2>&1'
     redis_db.setex(PROXY_REFRESH, REFRESH_SEC, True)
     os.system(fetchcmd)
 
-def proxyFetch(single_run=False):
+def proxyFetch(single_run=False, fake=False):
     while True:
         protect_ttl = redis_db.ttl(PROXY_PROTECT)
         refresh_ttl = redis_db.ttl(PROXY_REFRESH)
@@ -70,13 +70,29 @@ def proxyFetch(single_run=False):
             pcount = int(pcount)
         logger.info('代理数量：%s' % pcount)
         if pcount < PROXY_LOW and protect_ttl <= 0:
-            startFetch('代理池存量低了，需要补充些代理... (*゜ー゜*)', fetchcmd)
+            msg = '代理池存量低了，需要补充些代理... (*゜ー゜*)'
+            if fake:
+                logger.debug(msg)
+            else:
+                startFetch(msg, fetchcmd)
         elif pcount < PROXY_EXHAUST:
-            startFetch('代理池即将耗尽啦，需要立即补充些代理... Σ( ° △ °|||)', fetchcmd)
+            msg = '代理池即将耗尽啦，需要立即补充些代理... Σ( ° △ °|||)'
+            if fake:
+                logger.debug(msg)
+            else:
+                startFetch(msg, fetchcmd)
         elif pcount < PROXY_LOW and protect_ttl > 0:
-            logger.info('代理池存量有点低，但尚在保护期，让我们继续观察一会... O__O')
+            msg = '代理池存量有点低，但尚在保护期，让我们继续观察一会... O__O'
+            if fake:
+                logger.debug(msg)
+            else:
+                logger.info(msg)
         elif not refresh_ttl:
-            startFetch('代理池太久没更新啦，补充些新鲜代理... ლ(╹◡╹ლ)', fetchcmd)
+            msg = '代理池太久没更新啦，补充些新鲜代理... ლ(╹◡╹ლ)'
+            if fake:
+                logger.debug(msg)
+            else:
+                startFetch(msg, fetchcmd)
         else:
             logger.info('当前可用代理数：%s 库存情况良好... (๑•̀ㅂ•́)و✧' % pcount)
         
@@ -92,7 +108,7 @@ def proxyFetch(single_run=False):
             break
         time.sleep(LOOP_DELAY)
 
-def proxyCheck(single_run=False):
+def proxyCheck(single_run=False, fake=False):
     while True:
         logger.info('检查库存代理质量...')
         os.system(checkcmd)
@@ -130,31 +146,30 @@ def main():
         time.sleep(60)
 
 class TestCases(unittest.TestCase):
-    def proxyCheck(self):
+    def test_proxyFetch(self):
+        proxyFetch(True) 
+    def test_proxyCheck(self):
         proxyCheck(True)
         
-    def proxyFetch(self):
-        proxyFetch(True) 
-        
-    def proxyExhaust(self):
+    def test_proxyExhaust(self):
         redis_db.setex(PROXY_PROTECT, PROTECT_SEC, True)
         redis_db.set(PROXY_COUNT, 0)
-        proxyFetch(True)
+        proxyFetch(True, True)
         
-    def proxyLow(self):
+    def test_proxyLow(self):
         redis_db.delete(PROXY_PROTECT)
         redis_db.set(PROXY_COUNT, 3)
-        proxyFetch(True)
+        proxyFetch(True, True)
         
-    def proxyLowProtect(self):
+    def test_proxyLowProtect(self):
         redis_db.setex(PROXY_PROTECT, PROTECT_SEC, True)
         redis_db.set(PROXY_COUNT, 3)
-        proxyFetch(True)    
+        proxyFetch(True, True)    
     
-    def proxyRefresh(self):
+    def test_proxyRefresh(self):
         redis_db.delete(PROXY_REFRESH)
         redis_db.set(PROXY_COUNT, 10)
-        proxyFetch(True)  
+        proxyFetch(True, True)  
     
     def loop(self):
         main()

@@ -39,5 +39,5 @@ PROXY_VENDORS:
   
 # 可以配置多个验证页，会随机抽取一个用于验证
 PROXY_VALIDATORS:
-- url: http://119.29.246.101
+- url: http://olbllni9a.bkt.clouddn.com/text/helloworld.txt
   startstring: hello world! :)
